@@ -94,33 +94,12 @@ public class TicketService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: "));
 
         List<Ticket> tickets = ticketRepository.findByCustomer(customer);
-        for(Ticket ticket: tickets){
-            ticket.getAssignedAgent().setAssignedTickets(null);
-            ticket.setPriority(null);
-            ticket.getAssignedAgent().setEmployeeCode(null);
-            ticket.getAssignedAgent().setPassword(null);
-            ticket.getAssignedAgent().setPhoneNumber(null);
-            ticket.getAssignedAgent().setDepartment(null);
-            ticket.getAssignedAgent().setRoles(new HashSet<>());
-            ticket.getAssignedAgent().setId(null);
-            for(TicketComment tc: ticket.getComments()){
-                tc.setId(null);
-            }
-        }
         return tickets.stream().map(this::convertToDTO).collect(Collectors.toList());
     }
 
     public List<TicketEmpDTO> getTicketsByAgent(Long userId) {
-        List<Ticket> UpdatedList = new ArrayList<>();
         List<Ticket> tickets = ticketRepository.findByAssignedAgent(userRepository.findById(userId).get());
-
-         for(Ticket ticket:tickets){
-            ticket.getCustomer().setCustomerTickets(null);
-            if(!ticket.getStatus().equals(TicketStatus.RESOLVED)){
-                UpdatedList.add(ticket);
-            }
-         }
-        return UpdatedList.stream().map(this::convertToDTOs).collect(Collectors.toList());
+        return tickets.stream().map(this::convertToDTOs).collect(Collectors.toList());
     }
 
     public List<TicketDTO> getTicketsByStatus(TicketStatus status) {
