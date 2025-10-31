@@ -4,7 +4,8 @@ import com.support.desk.dto.TicketCommentDTO;
 import com.support.desk.dto.TicketDTO;
 import com.support.desk.dto.TicketDetailsUpdateDTO;
 import com.support.desk.dto.TicketEmpDTO;
-import com.support.desk.exception.ResourceNotFoundException;
+import com.support.desk.exception.TicketNotFoundException;
+import com.support.desk.exception.UserNotFoundException;
 import com.support.desk.model.*;
 import com.support.desk.repository.TicketCommentRepository;
 import com.support.desk.repository.TicketRepository;
@@ -14,8 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
@@ -32,8 +31,9 @@ public class TicketService {
     private TicketCommentRepository ticketCommentRepository;
 
     @Transactional
-    public TicketDTO createTicket(TicketDTO ticketDTO,Long userId) {
-        User customer = userRepository.findById(userId).get();
+    public TicketDTO createTicket(TicketDTO ticketDTO, Long userId) {
+        User customer = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId));
         Ticket ticket = new Ticket();
         ticket.setTicketId(generateFourDigitNumber());
         ticket.setTitle(ticketDTO.getTitle());
@@ -50,10 +50,11 @@ public class TicketService {
     @Transactional
     public TicketDTO assignTicket(Long ticketId, Long agentId) {
         Ticket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id: " + ticketId));
+                .orElseThrow(() -> new TicketNotFoundException("Ticket not found with id: " + ticketId));
 
         User agent = userRepository.findById(agentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Agent not found with id: " + agentId));
+                .orElseThrow(() -> new UserNotFoundException("Agent not found with id: " + agentId));
+
         ticket.setAssignedAgent(agent);
         ticket.setDepartment(agent.getDepartment());
         Ticket updatedTicket = ticketRepository.save(ticket);
@@ -64,14 +65,18 @@ public class TicketService {
     public String updateTicket(TicketDetailsUpdateDTO ticketDetailsUpdateDTO) {
         Ticket ticket = ticketRepository.findByTicketId(ticketDetailsUpdateDTO.getTicketId());
 
-        if(!ticket.getStatus().equals(TicketStatus.RESOLVED)){
-            if(ticketDetailsUpdateDTO.getStatus()!=ticket.getStatus() && ticketDetailsUpdateDTO.getStatus()!=null){
+        if (ticket == null) {
+            throw new TicketNotFoundException("Ticket not found with id: " + ticketDetailsUpdateDTO.getTicketId());
+        }
+
+        if (!ticket.getStatus().equals(TicketStatus.RESOLVED)) {
+            if (ticketDetailsUpdateDTO.getStatus() != ticket.getStatus() && ticketDetailsUpdateDTO.getStatus() != null) {
                 ticket.setStatus(ticketDetailsUpdateDTO.getStatus());
-                if(ticket.getStatus().equals(TicketStatus.RESOLVED)){
+                if (ticket.getStatus().equals(TicketStatus.RESOLVED)) {
                     ticket.setResolutionTime(LocalDateTime.now());
                 }
             }
-            if (!ticketDetailsUpdateDTO.getContent().isEmpty()){
+            if (!ticketDetailsUpdateDTO.getContent().isEmpty()) {
                 TicketComment ticketComment = new TicketComment();
                 ticketComment.setTicket(ticket);
                 ticketComment.setUser(ticket.getCustomer());
@@ -79,41 +84,54 @@ public class TicketService {
                 ticketComment.setCreatedAt(LocalDateTime.now());
                 ticket.getComments().add(ticketComment);
             }
-            if (ticketDetailsUpdateDTO.getPriority()!=ticket.getPriority() && ticketDetailsUpdateDTO.getPriority()!=null){
+            if (ticketDetailsUpdateDTO.getPriority() != ticket.getPriority() && ticketDetailsUpdateDTO.getPriority() != null) {
                 ticket.setPriority(ticketDetailsUpdateDTO.getPriority());
             }
             ticketRepository.save(ticket);
             return "Ticket details updated successfully";
-        }
-        else
-            return "The Ticket with id "+ ticket.getTicketId()+" is already Resolved.";
+        } else
+            return "The Ticket with id " + ticket.getTicketId() + " is already Resolved.";
     }
 
     public List<TicketDTO> getTicketsAssociatedToCustomer(Long userId) {
         User customer = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: "));
+                .orElseThrow(() -> new UserNotFoundException("User not found with username: "));
 
         List<Ticket> tickets = ticketRepository.findByCustomer(customer);
+        if (tickets.isEmpty()) {
+            throw new TicketNotFoundException("No tickets found for user with id: " + userId);
+        }
         return tickets.stream().map(this::convertToDTO).collect(Collectors.toList());
     }
 
     public List<TicketEmpDTO> getTicketsByAgent(Long userId) {
-        List<Ticket> tickets = ticketRepository.findByAssignedAgent(userRepository.findById(userId).get());
+        List<Ticket> tickets = ticketRepository.findByAssignedAgent(
+                userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId)));
+
+        if (tickets.isEmpty()) {
+            throw new TicketNotFoundException("No tickets found assigned to agent with id: " + userId);
+        }
         return tickets.stream().map(this::convertToDTOs).collect(Collectors.toList());
     }
 
     public List<TicketDTO> getTicketsByStatus(TicketStatus status) {
         List<Ticket> tickets = ticketRepository.findByStatus(status);
+        if (tickets.isEmpty()) {
+            throw new TicketNotFoundException("No tickets found with status: " + status);
+        }
         return tickets.stream().map(this::convertToDTO).collect(Collectors.toList());
     }
 
     public List<TicketDTO> getTicketsByDepartment(String department) {
         List<Ticket> tickets = ticketRepository.findByDepartment(department);
+        if (tickets.isEmpty()) {
+            throw new TicketNotFoundException("No tickets found in department: " + department);
+        }
         return tickets.stream().map(this::convertToDTO).collect(Collectors.toList());
     }
 
     public Long getTotalActiveTicketCount() {
-         Integer size = ticketRepository.findByStatus(TicketStatus.OPEN).size();
+        Integer size = ticketRepository.findByStatus(TicketStatus.OPEN).size();
         return size.longValue();
     }
 

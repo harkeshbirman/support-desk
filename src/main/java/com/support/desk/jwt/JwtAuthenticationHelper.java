@@ -3,6 +3,7 @@ package com.support.desk.jwt;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
@@ -14,8 +15,8 @@ import java.util.Map;
 @Component
 public class JwtAuthenticationHelper {
 
-
-	private String secret = "thisisacodingninjasdemonstrationforsecretkeyinspringsecurityjsonwebtokenauthentication";
+    @Value("${jwt.secret}")
+	private String secret;
 	private static final long JWT_TOKEN_VALIDITY = 60*60;
 
 	public String getUsernameFromToken(String token)
